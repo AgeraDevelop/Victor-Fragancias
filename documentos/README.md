@@ -3,6 +3,7 @@
 - [Mapa del proyecto](MAPA-PROYECTO.md): funcionalidades, archivos, estado y reglas actuales.
 - [Arquitectura y carpetas](ARQUITECTURA.md): conexiones y ubicación de cada área.
 - [Verificación](VERIFICACION.md): comprobaciones de la reorganización.
+- [Base de datos](BASE-DE-DATOS.md): esquema corregido, instalación y activación futura de pedidos y cupones.
 
 ## Instalación y ejecución
 
