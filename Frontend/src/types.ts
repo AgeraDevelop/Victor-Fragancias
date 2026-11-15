@@ -33,6 +33,16 @@ export interface PerfumeSize {
   ml: number;
   priceDOP: number;
   inStock: boolean;
+  /**
+   * Existencias de ESTA presentación concreta. `null`/`undefined` = sin límite.
+   * Cada ml se limita por separado.
+   */
+  stock?: number | null;
+  /**
+   * Id de la fila del backend que representa esta presentación. Varias
+   * presentaciones comparten perfume pero tienen su propia fila.
+   */
+  variantId?: string;
 }
 
 // ── Modelo principal: alimenta catálogo, carruseles, ficha, quiz y búsqueda ─
@@ -48,6 +58,12 @@ export interface Perfume {
   sizes: PerfumeSize[];
   selectedSizeIndex?: number;
   image: string;
+  /**
+   * `true` solo si el producto tiene una imagen real registrada en el catálogo
+   * administrado (en la BD o una URL externa). Si es `false`, `image` es solo
+   * un respaldo y el Hero no debe mostrarlo.
+   */
+  hasImage?: boolean;
   topNotes: string[];
   heartNotes: string[];
   baseNotes: string[];
@@ -59,6 +75,9 @@ export interface Perfume {
   isBestseller?: boolean;
   isNew?: boolean;
   batchCodeExample: string;
+  /** Existencias administradas en el Panel Admin. `null` = sin límite definido.
+   *  Con varias presentaciones (ml), es la SUMA del stock de todas ellas. */
+  stock?: number | null;
 }
 
 // ── Ítem dentro de la bolsa (una talla concreta de un perfume) ──────────────
@@ -136,35 +155,30 @@ export type OrderStatus =
 // Ítem congelado de un pedido (sobrevive aunque el perfume cambie o se borre)
 export interface OrderItem {
   perfumeId: string;
+  /** Id de la fila real de `productos` (presentación ml). Permite descontar el stock. */
+  variantId?: string;
   perfumeName: string;
   house: string;
   image: string;
   sizeMl: number;
   priceDOP: number;
   quantity: number;
+  subtotal?: number;
 }
 
 export interface Order {
   id: string;
-  userId: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
+  /** Código corto que también viaja en el mensaje de WhatsApp (ej. DV-123456). */
+  codigo?: string;
   items: OrderItem[];
   subtotal: number;
-  discountPercent: number;
-  discountAmount: number;
-  shippingCost: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  shippingCost?: number;
   total: number;
   couponCode?: string;
-  shippingAddress: {
-    province: string;
-    sector: string;
-    address: string;
-    deliveryType: 'express-sd' | 'nacional';
-  };
-  paymentMethod: CheckoutFormData['paymentMethod'];
-  notes?: string;
   status: OrderStatus;
   createdAt: string;
+  /** Fecha en que el admin confirmó el pedido (bajó el stock). */
+  confirmedAt?: string | null;
 }

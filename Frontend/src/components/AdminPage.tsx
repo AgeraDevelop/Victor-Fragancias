@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Package,
@@ -7,12 +7,16 @@ import {
   Shield,
   LogOut,
   Settings,
+  ClipboardList,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { AdminProducts } from './AdminProducts';
+import { AdminOrders } from './AdminOrders';
 import { AdminUsers } from './AdminUsers';
 import { AdminProfileModal } from './AdminProfileModal';
 import { AuthUser } from '../services/authService';
+import { orderService } from '../services/orderService';
+import { realtime } from '../services/realtimeService';
 
 interface AdminPageProps {
   currentUser: AuthUser;
@@ -30,8 +34,36 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   onGoToStore,
 }) => {
   const isSuper = currentUser.role === 'SuperAdmin';
-  const [activeTab, setActiveTab] = useState<'productos' | 'usuarios'>('productos');
+  const [activeTab, setActiveTab] = useState<'productos' | 'pedidos' | 'usuarios'>('productos');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState(0);
+
+  // Carga inicial y escucha en tiempo real del contador de pedidos pendientes.
+  useEffect(() => {
+    let alive = true;
+    const fetchPending = () => {
+      orderService
+        .getOrders()
+        .then((orders) => {
+          if (alive) setPendingOrders(orders.filter((o) => o.status === 'pendiente').length);
+        })
+        .catch(() => {
+          /* El badge es informativo; si falla, no molesta al admin. */
+        });
+    };
+
+    fetchPending();
+
+    // Sincronización en tiempo real para el badge de pedidos
+    const unsubscribe = realtime.on('orders_updated', () => {
+      fetchPending();
+    });
+
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#070707] text-[#FAF7F0] font-sans selection:bg-[#D4AF37] selection:text-[#050505]">
@@ -117,25 +149,42 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         </div>
       </header>
 
-      {/* Role Navigation Tabs (Only visible if user has SuperAdmin role) */}
-      {isSuper && (
-        <div className="bg-[#0e0e0e] border-b border-[#1c1c1c] px-4 sm:px-8">
-          <div className="max-w-7xl mx-auto flex items-center gap-2 pt-2">
-            <button
-              onClick={() => setActiveTab('productos')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
-                activeTab === 'productos'
-                  ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5 rounded-t-lg'
-                  : 'border-transparent text-[#777] hover:text-[#FAF7F0] hover:bg-[#141414] rounded-t-lg'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>Catálogo de Perfumes</span>
-            </button>
+      {/* Role Navigation Tabs (Usuarios solo para SuperAdmin) */}
+      <div className="bg-[#0e0e0e] border-b border-[#1c1c1c] px-4 sm:px-8">
+        <div className="max-w-7xl mx-auto flex items-center gap-2 pt-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('productos')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'productos'
+                ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5 rounded-t-lg'
+                : 'border-transparent text-[#777] hover:text-[#FAF7F0] hover:bg-[#141414] rounded-t-lg'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Catálogo de Perfumes</span>
+          </button>
 
+          <button
+            onClick={() => setActiveTab('pedidos')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'pedidos'
+                ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5 rounded-t-lg'
+                : 'border-transparent text-[#777] hover:text-[#FAF7F0] hover:bg-[#141414] rounded-t-lg'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Pedidos</span>
+            {pendingOrders > 0 && (
+              <span className="text-[10px] font-mono bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-500/40">
+                {pendingOrders}
+              </span>
+            )}
+          </button>
+
+          {isSuper && (
             <button
               onClick={() => setActiveTab('usuarios')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'usuarios'
                   ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5 rounded-t-lg'
                   : 'border-transparent text-[#777] hover:text-[#FAF7F0] hover:bg-[#141414] rounded-t-lg'
@@ -147,16 +196,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 Dueño
               </span>
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Main Admin Content */}
       <main className="py-4">
-        {activeTab === 'productos' || !isSuper ? (
-          <AdminProducts onProductsChanged={onProductsChanged} />
-        ) : (
+        {activeTab === 'pedidos' ? (
+          <AdminOrders onPendingCountChange={setPendingOrders} />
+        ) : activeTab === 'usuarios' && isSuper ? (
           <AdminUsers currentUser={currentUser} />
+        ) : (
+          <AdminProducts onProductsChanged={onProductsChanged} />
         )}
       </main>
 

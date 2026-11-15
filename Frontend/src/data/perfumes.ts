@@ -8,7 +8,7 @@
  *   - Agregar/quitar un perfume → array `PERFUMES_DATA` (abajo).
  *   - Cambiar el filtro "Casa Perfumera" → `HOUSES_LIST`.
  *   - Cambiar provincias del envío → `PROVINCES_RD`.
- *   - Los `id` son referencias fijas: los usan CampaignBanners, la wishlist
+ *   - Los `id` son referencias fijas: los usa el catálogo de respaldo
  *     por defecto y los enlaces del hero. No los cambies sin buscarlos.
  *   - `image` apunta a /assets/images/... servido desde Frontend/public/.
  * ─────────────────────────────────────────────────────────────────────────────

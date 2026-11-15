@@ -18,6 +18,7 @@
 import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Clock, MessageCircle, ChevronDown, ShieldCheck, Truck, RotateCcw, Send, Check } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { whatsappUrl } from '../config';
 
 export const AboutContact: React.FC = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -239,7 +240,7 @@ export const AboutContact: React.FC = () => {
 
               <div className="pt-2">
                 <a
-                  href="https://wa.me/18295553842?text=Hola%20D%27%20Victor%20Fragancias,%20deseo%20asesoria%20personalizada"
+                  href={whatsappUrl('Hola D’ Victor Fragancias, deseo asesoría personalizada')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[#25D366] text-black font-sans text-xs font-semibold uppercase tracking-wider hover:bg-[#20ba59] transition-colors"

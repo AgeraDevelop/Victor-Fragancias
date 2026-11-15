@@ -15,14 +15,18 @@
 
 import React from 'react';
 import { CheckCircle2, MessageCircle, ShieldCheck, Truck, Copy, Check, ArrowRight } from 'lucide-react';
-import { CheckoutFormData } from '../types';
+import { CheckoutFormData, OrderItem } from '../types';
 import { BrandLogo } from './BrandLogo';
+import { whatsappUrl } from '../config';
+import { orderService } from '../services/orderService';
 
 interface OrderConfirmationModalProps {
   orderInfo: {
     orderId: string;
     total: number;
     formData: CheckoutFormData;
+    /** Perfumes del pedido, congelados al momento del checkout. */
+    items: OrderItem[];
   } | null;
   onClose: () => void;
 }
@@ -35,7 +39,7 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
 
   if (!orderInfo) return null;
 
-  const { orderId, total, formData } = orderInfo;
+  const { orderId, total, formData, items } = orderInfo;
 
   // ── DATOS BANCARIOS (HARDCODE) ─────────────────────────────────────────────
   // Cuenta de ejemplo para pago por transferencia. Cambiar aquí y en el
@@ -46,18 +50,38 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
     setTimeout(() => setCopiedAccount(false), 2000);
   };
 
-  const generateWhatsAppConfirmation = () => {
-    const text = encodeURIComponent(
-      `¡Hola D’ Victor Fragancias! Acabo de registrar mi pedido en la web:\n` +
-      `🔖 No. Orden: ${orderId}\n` +
-      `👤 Cliente: ${formData.fullName}\n` +
-      `📱 Teléfono: ${formData.phone}\n` +
-      `📍 Dirección: ${formData.address}, ${formData.sector}, ${formData.province}\n` +
-      `💳 Método de Pago: ${formData.paymentMethod}\n` +
-      `💰 Total: RD$ ${total.toLocaleString()}\n` +
-      `Quedo a la espera de la confirmación de despacho. ¡Muchas gracias!`
+  // Registra el pedido en el backend al confirmar por WhatsApp, para que
+  // aparezca en el Panel Admin y su stock baje al confirmarlo. Si el backend
+  // no responde, el mensaje de WhatsApp se envía igual.
+  const submitOrderToBackend = () => {
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.priceDOP * item.quantity,
+      0
     );
-    return `https://wa.me/18295553842?text=${text}`;
+    void orderService
+      .createOrder({
+        codigo: orderId,
+        items,
+        subtotal,
+        total,
+        origin: 'whatsapp',
+      })
+      .catch(() => {
+        /* El pedido igual se envía por WhatsApp aunque falle el registro. */
+      });
+  };
+
+  const generateWhatsAppConfirmation = () => {
+    const text =
+      `¡Hola D’ Victor Fragancias! Acabo de registrar mi pedido en la web:\n` +
+      `No. Orden: ${orderId}\n` +
+      `Cliente: ${formData.fullName}\n` +
+      `Teléfono: ${formData.phone}\n` +
+      `Dirección: ${formData.address}, ${formData.sector}, ${formData.province}\n` +
+      `Método de Pago: ${formData.paymentMethod}\n` +
+      `Total: RD$ ${total.toLocaleString()}\n` +
+      `Quedo a la espera de la confirmación de despacho. ¡Muchas gracias!`;
+    return whatsappUrl(text);
   };
 
   return (
@@ -145,6 +169,7 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
         <div className="space-y-3">
           <a
             href={generateWhatsAppConfirmation()}
+            onClick={submitOrderToBackend}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-3 bg-[#25D366] hover:bg-[#20ba59] text-black font-sans text-xs font-semibold uppercase tracking-wider rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer"

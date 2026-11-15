@@ -26,7 +26,7 @@ export interface AdminUser {
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000/api';
 
-// Memoria volátil de sesión para no guardar el token en localStorage/cookies inseguras
+// Sesión en memoria volátil: el token nunca se persiste en el navegador.
 let currentAuthToken: string | null = null;
 let currentAuthUser: AuthUser | null = null;
 

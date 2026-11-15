@@ -17,7 +17,7 @@
 import React from 'react';
 import { BrandLogo } from './BrandLogo';
 import { Reveal } from './Reveal';
-import { MapPin, Phone, Mail, Instagram, ShieldCheck, Heart } from 'lucide-react';
+import { MapPin, Phone, Mail, Instagram, ShieldCheck } from 'lucide-react';
 
 interface FooterProps {
   onNavigate: (tab: string) => void;

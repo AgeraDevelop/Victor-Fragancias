@@ -50,22 +50,40 @@ dvictor-fragancia/
 7. Los archivos `.env*`, las dependencias y `dist/` permanecen en la raíz del
    repositorio. El comando `lint` selecciona explícitamente el proyecto TypeScript
    del frontend. Tailwind procesa sus componentes y estilos durante el build.
-8. Los carritos guardados en `dv_cart` conservan sus cantidades y precios. Al
-   cargarlos se actualiza el prefijo antiguo de imágenes `/src/assets/images/`
-   a `/assets/images/`. Los IDs y la clave `dv_wishlist` permanecen iguales.
+8. El carrito vive solo en memoria durante la sesión: el proyecto no usa
+   `localStorage` ni `sessionStorage`. Al recargar la página la bolsa se vacía.
 
 ## Backend y base de datos
 
-En la rama reorganizada no existe servidor, endpoint HTTP, esquema Prisma,
-cliente Prisma, migración, conexión SQL ni integración Supabase. Los `.gitkeep`
-permiten conservar las carpetas reservadas en Git. No requieren procesos ni
-conexiones para ejecutar la tienda actual.
+El backend Express vive en `backend/` (rutas, controladores, repositorios y
+utilidades) y Prisma en `base-de-datos/prisma/schema.prisma`. La base de datos
+es PostgreSQL en Supabase; el servidor es el único que la consulta y el frontend
+consume la API REST en `http://localhost:4000/api`.
 
-Cuando se implemente persistencia, los controladores, rutas y servicios irán en
-`backend/`; los esquemas, migraciones, semillas y configuración de Prisma irán en
-`base-de-datos/`. El servidor será quien acceda a la base de datos, y el frontend
-consumirá la API. Esa integración todavía no está implementada.
+### Imágenes de los productos
 
-Las dependencias `express`, `dotenv` y `@google/genai` ya estaban declaradas sin
-uso en el código. Se conserva el archivo de bloqueo y sus versiones para que
-esta reorganización no cambie las dependencias.
+Las imágenes de los productos se guardan **dentro de la base de datos**, no como
+archivos en el frontend. Hay dos formas de cargarlas y **ambas terminan con los
+bytes en la BD**:
+
+- **Subir un archivo** desde el equipo → el Admin lo envía como base64
+  (`imagen_base64` + `imagen_mime`).
+- **Pegar una URL de internet** → el backend la **descarga** (`utils/image.ts` →
+  `downloadImage`) y guarda los bytes. Así no hay que descargar el archivo a
+  mano, pero la imagen queda alojada en la BD y no depende de la web externa.
+
+Detalles:
+
+- Columnas en `productos`: `imagen_data` (`bytea` con los bytes) e `imagen_mime`
+  (tipo MIME, ej. `image/jpeg`).
+- `imagen_url` se conserva solo para rutas relativas antiguas; cuando la imagen
+  se descarga/sube, queda en `null` porque ya vive en la BD.
+- El backend valida tipo (JPG/PNG/WEBP/GIF/AVIF, detectado también por firma
+  binaria) y tamaño (máx. 8 MB).
+- La imagen se sirve por `GET /api/productos/:id/imagen`. En las respuestas, el
+  campo `imagen_url` apunta a ese endpoint cuando el producto tiene imagen en BD
+  (`has_db_image: true`).
+- Si la URL externa bloquea la descarga (algunos sitios lo hacen), la API
+  responde con un mensaje claro y el producto no se modifica.
+- El SQL idempotente que agrega las columnas está en
+  `base-de-datos/sql/add-producto-imagen.sql`.
