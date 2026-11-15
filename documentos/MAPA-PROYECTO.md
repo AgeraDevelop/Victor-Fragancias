@@ -54,13 +54,13 @@ en el frontend; la documentación para desarrolladores vive en `documentos/`.
 ## Estado y persistencia
 
 `App.tsx` administra `activeTab`, `tabKey`, `selectedPerfume`, `isCartOpen`,
-`isSearchOpen`, `isWishlistOpen`, `orderConfirmation`, `cart` y `wishlist`.
+`isSearchOpen` y `orderConfirmation`, además del carrito (`cart`).
 
-- `dv_cart` guarda los ítems completos de la bolsa en `localStorage`.
-- `dv_wishlist` guarda IDs; los favoritos iniciales son `tabac-dore-reserve` y
-  `desirtoxic-azur-niche`.
+- El carrito vive solo en memoria durante la sesión: **no se usa `localStorage`
+  ni `sessionStorage`** en ninguna parte del proyecto.
 - La confirmación de pedido solo existe en memoria durante la sesión.
-- No hay backend ni base de datos, y no se utiliza Prisma.
+- El catálogo se carga desde el backend (API Express + Prisma) y solo muestra
+  los productos marcados como disponibles en el Panel Admin.
 
 ## Datos del catálogo
 

@@ -1,74 +1,79 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * ARCHIVO: Frontend/src/components/Hero.tsx
- * QUÉ ES: Banner principal con slideshow cinematográfico automático (3 imágenes)
- *         que entran desde la derecha de forma fluida y lenta, más animaciones
- *         de entrada en cascada.
+ * QUÉ ES: Banner principal ("Inicio") con slideshow cinematográfico automático.
+ *         Las imágenes salen ÚNICAMENTE de los perfumes DESTACADOS que existen
+ *         en el catálogo administrado (base de datos). Si no hay destacados con
+ *         imagen, el Hero no muestra ninguna imagen (no usa respaldos).
  * DÓNDE SE VE: Inicio → primer bloque después del Header.
  * QUÉ TOCAR:
- *   - Imágenes del slider → constante HERO_SLIDES.
  *   - Velocidad del cambio automático → HERO_SLIDE_INTERVAL_MS.
  *   - Textos y botones → bloque "Contenido del Hero".
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { Perfume } from '../types';
 
 interface HeroProps {
+  /** Perfumes DESTACADOS del catálogo (los que administra el Panel Admin). */
+  featuredPerfumes?: Perfume[];
   onShopClick: () => void;
   onExploreFeatured: () => void;
 }
 
-// Imágenes que se deslizan en el banner principal
-const HERO_SLIDES = [
-  {
-    src: '/assets/images/hero_luxury_perfume_1793299734093.jpg',
-    alt: "D' Victor Fragancias - Aeterna Private Reserve",
-  },
-  {
-    src: '/assets/images/campaign_tobacco_gold_1793303201731.jpg',
-    alt: "Bortnikoff Tabac Doré - Campaña D' Victor Fragancias",
-  },
-  {
-    src: '/assets/images/campaign_azure_niche_1793303200950.jpg',
-    alt: "M.Micallef DésirToxic - Campaña D' Victor Fragancias",
-  },
-  {
-    src: '/assets/images/perfume_creed_aventus_1793299734804.jpg',
-    alt: "Creed Aventus Imperial - Colección Privada D' Victor",
-  },
-  {
-    src: '/assets/images/perfume_baccarat_rouge_1793299737267.jpg',
-    alt: "Maison Francis Kurkdjian Baccarat Rouge 540 Extrait",
-  },
-] as const;
-
 // Cada cuánto avanza solo el slider (en milisegundos)
 const HERO_SLIDE_INTERVAL_MS = 7000;
 
-// La primera imagen se repite al final para que el bucle sea continuo
-const LOOP_CLONE_INDEX = HERO_SLIDES.length;
-const RENDERED_SLIDES = [...HERO_SLIDES, HERO_SLIDES[0]];
+// Máximo de imágenes que se muestran en el slider del Hero.
+const MAX_HERO_SLIDES = 6;
 
-export const Hero: React.FC<HeroProps> = ({ onShopClick, onExploreFeatured }) => {
+export const Hero: React.FC<HeroProps> = ({
+  featuredPerfumes,
+  onShopClick,
+  onExploreFeatured,
+}) => {
+  // Las imágenes del Hero salen SOLO de los destacados que tienen una imagen
+  // real registrada en el catálogo. Nada de imágenes de respaldo.
+  const slides = useMemo(() => {
+    return (featuredPerfumes || [])
+      .filter((p) => p.hasImage && p.image)
+      .slice(0, MAX_HERO_SLIDES)
+      .map((p) => ({ src: p.image, alt: `${p.house} ${p.name}` }));
+  }, [featuredPerfumes]);
+
+  const hasSlides = slides.length > 0;
+
   const [position, setPosition] = useState(0);
   const [skipTransition, setSkipTransition] = useState(false);
 
-  const activeIndex = position % HERO_SLIDES.length;
+  // La primera imagen se repite al final para que el bucle sea continuo
+  const loopCloneIndex = slides.length;
+  const renderedSlides = hasSlides ? [...slides, slides[0]] : [];
+  const activeIndex = hasSlides ? position % slides.length : 0;
 
-  // Avance automático continuo (siempre activo, sin pausas)
+  // Al cambiar la cantidad de slides (p. ej. cuando cargan los destacados),
+  // reiniciamos el carrusel para evitar posiciones fuera de rango.
   useEffect(() => {
+    setPosition(0);
+    setSkipTransition(true);
+  }, [slides.length]);
+
+  // Avance automático continuo (solo si hay imágenes)
+  useEffect(() => {
+    if (!hasSlides) return;
+
     const intervalId = window.setInterval(() => {
-      setPosition((prev) => (prev >= LOOP_CLONE_INDEX ? prev : prev + 1));
+      setPosition((prev) => (prev >= loopCloneIndex ? prev : prev + 1));
     }, HERO_SLIDE_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [loopCloneIndex, hasSlides]);
 
   // Al terminar la transición del clon, saltamos al inicio sin animación
   const handleTransitionEnd = () => {
-    if (position === LOOP_CLONE_INDEX) {
+    if (hasSlides && position === loopCloneIndex) {
       setSkipTransition(true);
       setPosition(0);
     }
@@ -77,7 +82,7 @@ export const Hero: React.FC<HeroProps> = ({ onShopClick, onExploreFeatured }) =>
   // Respaldo por si el navegador no dispara transitionend (pestaña en segundo
   // plano, animaciones desactivadas, etc.): el slider nunca se queda trabado.
   useEffect(() => {
-    if (position !== LOOP_CLONE_INDEX) return;
+    if (!hasSlides || position !== loopCloneIndex) return;
 
     const timeoutId = window.setTimeout(() => {
       setSkipTransition(true);
@@ -85,7 +90,7 @@ export const Hero: React.FC<HeroProps> = ({ onShopClick, onExploreFeatured }) =>
     }, 2100);
 
     return () => window.clearTimeout(timeoutId);
-  }, [position]);
+  }, [position, loopCloneIndex, hasSlides]);
 
   // Reactivamos la transición después de pintar el salto invisible
   useEffect(() => {
@@ -102,32 +107,35 @@ export const Hero: React.FC<HeroProps> = ({ onShopClick, onExploreFeatured }) =>
   return (
     <section className="relative overflow-hidden bg-[#050505]">
       <div className="relative w-full min-h-[480px] h-[520px] sm:h-[600px] lg:h-[680px] bg-[#080808] flex items-center">
-        {/* Slider de imágenes de fondo: cada imagen entra fluidamente desde la derecha */}
-        <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-          <div
-            className={`hero-slides-track h-full ${skipTransition ? 'no-transition' : ''}`}
-            style={{ transform: `translate3d(-${position * 100}%, 0, 0)` }}
-            onTransitionEnd={handleTransitionEnd}
-          >
-            {RENDERED_SLIDES.map((slide, index) => (
-              <div
-                key={`${slide.src}-${index}`}
-                className="hero-slide relative h-full w-full shrink-0"
-              >
-                <img
-                  src={slide.src}
-                  alt={slide.alt}
-                  className={`hero-slide-image absolute inset-0 w-full h-full object-cover object-center ${
-                    index % HERO_SLIDES.length === activeIndex ? 'is-active' : ''
-                  }`}
-                  referrerPolicy="no-referrer"
-                  loading="eager"
-                  draggable={false}
-                />
-              </div>
-            ))}
+        {/* Slider de imágenes de fondo: solo si hay destacados con imagen.
+            Cada imagen entra fluidamente desde la derecha. */}
+        {hasSlides && (
+          <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+            <div
+              className={`hero-slides-track h-full ${skipTransition ? 'no-transition' : ''}`}
+              style={{ transform: `translate3d(-${position * 100}%, 0, 0)` }}
+              onTransitionEnd={handleTransitionEnd}
+            >
+              {renderedSlides.map((slide, index) => (
+                <div
+                  key={`${slide.src}-${index}`}
+                  className="hero-slide relative h-full w-full shrink-0"
+                >
+                  <img
+                    src={slide.src}
+                    alt={slide.alt}
+                    className={`hero-slide-image absolute inset-0 w-full h-full object-cover object-center ${
+                      index % slides.length === activeIndex ? 'is-active' : ''
+                    }`}
+                    referrerPolicy="no-referrer"
+                    loading="eager"
+                    draggable={false}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Scrim con animación de entrada */}
         <div className="hero-scrim-anim absolute inset-0 bg-gradient-to-r from-black/85 via-black/50 to-transparent" />
@@ -154,35 +162,37 @@ export const Hero: React.FC<HeroProps> = ({ onShopClick, onExploreFeatured }) =>
             {/* Botones de acción */}
             <div className="hero-btns flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <button
-                onClick={onExploreFeatured}
+                onClick={onShopClick}
                 className="btn-impact w-full sm:w-auto text-center px-6 sm:px-8 py-3 sm:py-3.5 bg-transparent border border-[#FAF7F0] hover:bg-[#FAF7F0] hover:text-[#050505] text-[#FAF7F0] font-sans text-[11px] sm:text-xs uppercase tracking-[0.2em] font-medium transition-all duration-300 cursor-pointer"
               >
-                Descubrir AETERNA 1744
+                Ver Catálogo
               </button>
 
               <button
-                onClick={onShopClick}
+                onClick={onExploreFeatured}
                 className="btn-impact w-full sm:w-auto text-center px-6 py-3 sm:py-3.5 bg-[#D4AF37] hover:bg-[#FFD76A] text-[#050505] font-sans text-[11px] sm:text-xs uppercase tracking-[0.2em] font-semibold transition-all duration-300 cursor-pointer shadow-[0_0_30px_-5px_rgba(212,175,55,0.5)]"
               >
-                Explorar Catálogo
+                Destacados
               </button>
             </div>
           </div>
         </div>
 
-        {/* Indicadores del slider */}
-        <div className="hero-slide-dots absolute bottom-4 right-4 sm:bottom-7 sm:right-8 z-20 flex items-center gap-1.5 sm:gap-2">
-          {HERO_SLIDES.map((slide, index) => (
-            <button
-              key={slide.src}
-              type="button"
-              onClick={() => goToSlide(index)}
-              aria-label={`Ir a la imagen ${index + 1} de ${HERO_SLIDES.length}`}
-              aria-current={index === activeIndex}
-              className={`hero-slide-dot ${index === activeIndex ? 'is-active' : ''}`}
-            />
-          ))}
-        </div>
+        {/* Indicadores del slider (solo si hay imágenes) */}
+        {hasSlides && (
+          <div className="hero-slide-dots absolute bottom-4 right-4 sm:bottom-7 sm:right-8 z-20 flex items-center gap-1.5 sm:gap-2">
+            {slides.map((slide, index) => (
+              <button
+                key={slide.src}
+                type="button"
+                onClick={() => goToSlide(index)}
+                aria-label={`Ir a la imagen ${index + 1} de ${slides.length}`}
+                aria-current={index === activeIndex}
+                className={`hero-slide-dot ${index === activeIndex ? 'is-active' : ''}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Trust Mini-Bar con animación de entrada */}

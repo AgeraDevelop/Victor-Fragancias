@@ -1,17 +1,15 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * ARCHIVO: Frontend/src/components/Header.tsx
- * QUÉ ES: Barra superior fija. Promo, logo, menú de navegación, buscador,
- *         indicador de moneda, favoritos, bolsa y menú móvil.
+ * QUÉ ES: Barra superior fija. Logo, menú de navegación, buscador,
+ *         indicador de moneda, bolsa y menú móvil.
  * DÓNDE SE VE: Arriba de todas las páginas (sticky).
  * SE RENDERIZA DESDE: App.tsx (<Header ... />).
- * PROPS: activeTab, onNavigate, cartCount, onOpenCart, wishlistCount,
- *        onOpenWishlist, onOpenSearch, onOpenBrandSystem, onOpenQuiz,
- *        onScrollToSection.
+ * PROPS: activeTab, onNavigate, cartCount, onOpenCart, onOpenSearch,
+ *        onOpenBrandSystem, onOpenQuiz, onScrollToSection.
  * QUÉ TOCAR:
- *   - Texto de la promo / umbral de envío gratis → "Top micro promo bar".
  *   - Enlaces del menú de escritorio → "Zone 2".
- *   - Botones de buscar / favoritos / bolsa → "Zone 3".
+ *   - Botones de buscar / bolsa → "Zone 3".
  *   - Menú móvil → bloque "Mobile Drawer Navigation".
  *   - Para agregar una pestaña nueva, añade el botón y su caso en
  *     `handleNavClick`.
@@ -19,7 +17,7 @@
  */
 
 import React, { useState } from 'react';
-import { ShoppingBag, Search, Heart, Menu, X } from 'lucide-react';
+import { ShoppingBag, Search, Menu, X } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 interface HeaderProps {
@@ -27,8 +25,6 @@ interface HeaderProps {
   onNavigate: (tab: string) => void;
   cartCount: number;
   onOpenCart: () => void;
-  wishlistCount: number;
-  onOpenWishlist: () => void;
   onOpenSearch: () => void;
   onOpenBrandSystem?: () => void;
   onOpenQuiz?: () => void;
@@ -40,8 +36,6 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate,
   cartCount,
   onOpenCart,
-  wishlistCount,
-  onOpenWishlist,
   onOpenSearch,
   onOpenBrandSystem,
   onOpenQuiz,
@@ -52,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleNavClick = (sectionOrTab: string) => {
     if (sectionOrTab === 'catalogo') {
       onNavigate(sectionOrTab);
-    } else if (onScrollToSection && (sectionOrTab === 'best-sellers' || sectionOrTab === 'campaigns')) {
+    } else if (onScrollToSection && sectionOrTab === 'destacados') {
       if (activeTab !== 'inicio') {
         onNavigate('inicio');
         setTimeout(() => onScrollToSection(sectionOrTab), 150);
@@ -67,13 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md border-b border-[#1f1f1f]">
-      {/* Top micro promo bar */}
-      <div className="bg-[#0c0c0c] border-b border-[#1a1a1a] text-[10px] sm:text-[11px] py-1 px-3 sm:px-4 text-center text-[#B8B8B8] font-sans leading-tight">
-        <span className="text-[#D4AF37] font-semibold mr-1.5">REPUBLICA DOMINICANA:</span>
-        Envíos express gratis en órdenes superiores a <span className="text-[#FAF7F0] font-mono font-bold">RD$ 8,000</span>
-        <span className="hidden sm:inline text-[#D4AF37] ml-2">· Sello de Autenticidad Garantizado</span>
-      </div>
-
       {/* Main Top Bar (MaxAroma Style: Logo — Nav — Search & Bag) */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-18 flex items-center justify-between gap-2 sm:gap-6">
         {/* Zone 1: Logo */}
@@ -104,16 +91,10 @@ export const Header: React.FC<HeaderProps> = ({
             Catálogo
           </button>
           <button
-            onClick={() => handleNavClick('best-sellers')}
+            onClick={() => handleNavClick('destacados')}
             className="whitespace-nowrap shrink-0 text-[#B8B8B8] hover:text-[#FAF7F0] transition-colors py-1"
           >
-            Best Sellers
-          </button>
-          <button
-            onClick={() => handleNavClick('campaigns')}
-            className="whitespace-nowrap shrink-0 text-[#B8B8B8] hover:text-[#FAF7F0] transition-colors py-1"
-          >
-            Campañas
+            Destacados
           </button>
         </nav>
 
@@ -127,23 +108,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Search className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
             <span className="hidden sm:inline text-[11px]">Buscar fragancia...</span>
-          </button>
-
-          {/* Currency indicator (RD$) */}
-          <span className="hidden sm:inline-block text-[11px] font-mono text-[#D4AF37] font-semibold px-2 py-1 bg-[#111] border border-[#262626] rounded">
-            RD$ DOP
-          </span>
-
-          {/* Wishlist */}
-          <button
-            onClick={onOpenWishlist}
-            className="relative p-2 text-[#B8B8B8] hover:text-[#FAF7F0] transition-colors rounded-full hover:bg-[#111]"
-            aria-label="Ver favoritos"
-          >
-            <Heart className="w-4 h-4" />
-            {wishlistCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37]" />
-            )}
           </button>
 
           {/* Shopping Bag Button (MaxAroma style) */}
@@ -186,16 +150,10 @@ export const Header: React.FC<HeaderProps> = ({
             Catálogo Completo
           </button>
           <button
-            onClick={() => handleNavClick('best-sellers')}
+            onClick={() => handleNavClick('destacados')}
             className="block w-full text-left py-1.5 text-[#B8B8B8]"
           >
-            Best Sellers
-          </button>
-          <button
-            onClick={() => handleNavClick('campaigns')}
-            className="block w-full text-left py-1.5 text-[#B8B8B8]"
-          >
-            Campañas Publicitarias
+            Destacados
           </button>
         </div>
       )}

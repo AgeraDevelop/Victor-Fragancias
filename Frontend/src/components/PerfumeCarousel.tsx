@@ -6,13 +6,13 @@
  *         Animación fluida de fade-in + slide-up al entrar al viewport y
  *         fade-out + slide-down al salir, con timing 0.6s ease-out y stagger escalonado.
  *         Soporte para arrastre con el mouse (inercia/momentum) y gestos táctiles.
- * DÓNDE SE VE: Inicio → bloques 2 ("Nuevas Llegadas") y 4 ("Los Más Vendidos").
- * SE RENDERIZA DESDE: App.tsx (dos veces, con distinto título y `isHot`).
+ * DÓNDE SE VE: Inicio → bloque "Catálogo" (carrusel).
+ * SE RENDERIZA DESDE: App.tsx.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Star, Flame, Eye, ShoppingBag } from 'lucide-react';
+import { Flame, Eye, ShoppingBag } from 'lucide-react';
 import { Perfume } from '../types';
 import { Reveal } from './Reveal';
 
@@ -21,7 +21,7 @@ interface PerfumeCarouselProps {
   subtitle?: string;
   perfumes: Perfume[];
   onSelectPerfume: (perfume: Perfume) => void;
-  onAddToCart: (perfume: Perfume, sizeMl: number) => void;
+  onQuickAdd: (perfume: Perfume) => void;
   onSeeMore?: () => void;
   isHot?: boolean;
   enableScrollReveal?: boolean;
@@ -106,7 +106,7 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
   subtitle,
   perfumes,
   onSelectPerfume,
-  onAddToCart,
+  onQuickAdd,
   onSeeMore,
   isHot = false,
   enableScrollReveal,
@@ -114,7 +114,7 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  // Activamos el scroll reveal si se solicita explícitamente o si es la sección "Nuevas Llegadas"
+  // Activamos el scroll reveal si se solicita explícitamente.
   const isRevealActive =
     enableScrollReveal !== undefined
       ? enableScrollReveal
@@ -207,11 +207,10 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
     lastTimeRef.current = performance.now();
     velocityRef.current = 0;
 
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {
-      // Ignorar si el navegador no soporta setPointerCapture
-    }
+    // NO capturamos el puntero aquí: si lo hiciéramos, el navegador redirige
+    // los eventos al contenedor y el `click` de los botones ("Añadir" / ojo)
+    // nunca llegaría al botón. Solo capturamos cuando el arrastre arranca de
+    // verdad (ver handlePointerMove).
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -233,6 +232,13 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
     if (!isDraggingRef.current && Math.abs(deltaX) > 4) {
       isDraggingRef.current = true;
       setIsDragging(true);
+      // Capturamos el puntero SOLO cuando el arrastre ya empezó, para que un
+      // clic simple sobre un botón no se vea afectado.
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // Ignorar si el navegador no soporta setPointerCapture
+      }
     }
 
     if (isDraggingRef.current) {
@@ -342,7 +348,7 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isDraggingRef.current) return;
-                  onAddToCart(perfume, perfume.sizes[0].ml);
+                  onQuickAdd(perfume);
                 }}
                 className="px-2.5 py-1 sm:px-3 sm:py-1 bg-[#D4AF37] hover:bg-[#FFD76A] text-[#050505] rounded text-[10px] sm:text-[11px] font-sans font-semibold flex items-center gap-1 shadow-md cursor-pointer"
               >
@@ -375,30 +381,21 @@ export const PerfumeCarousel: React.FC<PerfumeCarouselProps> = ({
               {perfume.gender} · {perfume.concentration}
             </span>
 
-            {/* Calificación en estrellas */}
-            <div className="flex items-center gap-0.5 mt-1 text-[#FFD76A]">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`w-2 h-2 sm:w-2.5 sm:h-2.5 ${
-                    i < Math.floor(perfume.rating) ? 'fill-current' : 'opacity-40'
-                  }`}
-                />
-              ))}
-              <span className="text-[9px] sm:text-[10px] text-[#777] font-sans ml-1">
-                ({perfume.reviewsCount})
-              </span>
-            </div>
-
             {/* Precio adaptativo en RD$ */}
             <div className="mt-1 font-mono text-[11px] sm:text-xs md:text-sm font-semibold text-[#FAF7F0] tabular-nums">
               {priceText}
             </div>
 
-            {/* Indicador de presentaciones */}
-            <div className="mt-1 flex items-center gap-1.5 text-[9px] sm:text-[10px] text-[#B8B8B8]">
-              <span>{perfume.sizes.length} Presentaciones</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
+            {/* Presentaciones (ml) disponibles */}
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+              {perfume.sizes.map((s) => (
+                <span
+                  key={s.ml}
+                  className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border border-[#262626] text-[#B8B8B8]"
+                >
+                  {s.ml} ml
+                </span>
+              ))}
             </div>
           </div>
         </ScrollRevealCard>

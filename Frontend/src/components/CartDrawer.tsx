@@ -16,10 +16,12 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState } from 'react';
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, CheckCircle2, MessageCircle, Truck } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Trash2, ShoppingBag, ShieldCheck, CheckCircle2, MessageCircle, Truck } from 'lucide-react';
 import { CartItem, CheckoutFormData } from '../types';
 import { PROVINCES_RD } from '../data/perfumes';
+import { whatsappUrl } from '../config';
+import { orderService } from '../services/orderService';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -29,6 +31,8 @@ interface CartDrawerProps {
   onRemoveItem: (perfumeId: string, sizeMl: number) => void;
   onClearCart: () => void;
   onOrderPlaced: (orderId: string, total: number, formData: CheckoutFormData) => void;
+  /** Cierra la bolsa y lleva al cliente al catálogo de perfumes. */
+  onExplore: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -39,12 +43,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onRemoveItem,
   onClearCart,
   onOrderPlaced,
+  onExplore,
 }) => {
   const [step, setStep] = useState<'cart' | 'checkout'>('cart');
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
-  const [couponError, setCouponError] = useState('');
-  const [couponSuccess, setCouponSuccess] = useState('');
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     fullName: '',
@@ -58,31 +59,32 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     notes: '',
   });
 
+  // Código del pedido: se genera una vez por contenido de la bolsa y viaja
+  // tanto al mensaje de WhatsApp como al backend, para poder relacionarlos.
+  const orderCode = useMemo(
+    () => `DV-${Math.floor(100000 + Math.random() * 900000)}`,
+    [items]
+  );
+
   if (!isOpen) return null;
+
+  // Stock de la presentación (ml) concreta de un ítem del carrito.
+  const sizeStockOf = (item: CartItem): number | null | undefined =>
+    item.perfume.sizes.find((s) => s.ml === item.sizeMl)?.stock;
+
+  // ¿El ítem ya alcanzó el stock disponible de SU presentación (ml)?
+  const isMaxStockReached = (item: CartItem) => {
+    const stock = sizeStockOf(item);
+    return stock !== null && stock !== undefined && item.quantity >= stock;
+  };
 
   // ── TOTALES Y ENVÍO ────────────────────────────────────────────────────────
   // Envío gratis desde RD$ 8,000. Si no califica: RD$ 350 (SD) o RD$ 500 (nacional).
   const subtotal = items.reduce((acc, item) => acc + item.priceDOP * item.quantity, 0);
-  const discountAmount = Math.round((subtotal * appliedDiscountPercent) / 100);
   const shippingThreshold = 8000;
   const isShippingFree = subtotal >= shippingThreshold;
   const shippingCost = isShippingFree ? 0 : formData.deliveryType === 'express-sd' ? 350 : 500;
-  const finalTotal = Math.max(0, subtotal - discountAmount + shippingCost);
-
-  // ── CUPONES VÁLIDOS ────────────────────────────────────────────────────────
-  // DVICTOR10 y ELEGANCIA10 aplican 10% sobre el subtotal.
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCouponError('');
-    setCouponSuccess('');
-    const code = couponCode.trim().toUpperCase();
-    if (code === 'DVICTOR10' || code === 'ELEGANCIA10') {
-      setAppliedDiscountPercent(10);
-      setCouponSuccess('¡Cupón del 10% aplicado con éxito!');
-    } else {
-      setCouponError('Código no válido. Usa "DVICTOR10" para 10% de descuento.');
-    }
-  };
+  const finalTotal = subtotal + shippingCost;
 
   // ── CONFIRMAR PEDIDO (SIMULADO) ────────────────────────────────────────────
   // Genera un ID aleatorio y notifica a App. No hay backend ni pasarela real:
@@ -98,26 +100,59 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     onOrderPlaced(orderId, finalTotal, formData);
   };
 
+  // ── REGISTRAR EL PEDIDO EN EL BACKEND ──────────────────────────────────────
+  // Se dispara al pulsar "Pedir por WhatsApp": guarda el pedido (con sus
+  // perfumes) para que el Panel Admin lo vea y lo confirme. Si el backend no
+  // responde, no bloquea al cliente: el mensaje de WhatsApp se envía igual.
+  const submitOrderToBackend = () => {
+    const orderItems = items.map((item) => ({
+      perfumeId: item.perfume.id,
+      variantId:
+        item.perfume.sizes.find((s) => s.ml === item.sizeMl)?.variantId ||
+        item.perfume.id,
+      perfumeName: item.perfume.name,
+      house: item.perfume.house,
+      image: item.perfume.image,
+      sizeMl: item.sizeMl,
+      priceDOP: item.priceDOP,
+      quantity: item.quantity,
+    }));
+
+    void orderService
+      .createOrder({
+        codigo: orderCode,
+        items: orderItems,
+        subtotal,
+        shippingCost,
+        total: finalTotal,
+        origin: 'whatsapp',
+      })
+      .catch(() => {
+        /* El pedido igual se envía por WhatsApp aunque falle el registro. */
+      });
+  };
+
   // WhatsApp Direct Link
   const getWhatsAppCartUrl = () => {
     const itemsText = items
       .map(
         (item) =>
-          `• ${item.quantity}x ${item.perfume.name} (${item.sizeMl} ml) - RD$ ${(item.priceDOP * item.quantity).toLocaleString()}`
+          `*${item.quantity}× ${item.perfume.name}*\n` +
+          `     ${item.sizeMl} ml — RD$ ${(item.priceDOP * item.quantity).toLocaleString()}`
       )
-      .join('\n');
+      .join('\n\n');
 
-    const message = encodeURIComponent(
-      `¡Hola D’ Victor Fragancias! Me gustaría ordenar los siguientes perfumes de la tienda web:\n\n` +
-        itemsText +
-        `\n\n💰 Subtotal: RD$ ${subtotal.toLocaleString()}` +
-        (appliedDiscountPercent > 0 ? `\n🏷️ Descuento (${appliedDiscountPercent}%): -RD$ ${discountAmount.toLocaleString()}` : '') +
-        `\n🚚 Envío: ${isShippingFree ? 'Gratis' : `RD$ ${shippingCost.toLocaleString()}`}` +
-        `\n✨ Total Estimado: RD$ ${finalTotal.toLocaleString()}\n\n` +
-        `¿Tienen disponibilidad para coordinar el envío? ¡Muchas gracias!`
-    );
+    const message =
+      `*NUEVO PEDIDO — D’ Victor Fragancias*\n` +
+      `Orden: ${orderCode}\n\n` +
+      `¡Hola! Quisiera ordenar los siguientes perfumes:\n\n` +
+      `${itemsText}\n\n` +
+      `——————————————\n` +
+      `*Total: RD$ ${finalTotal.toLocaleString()}*\n` +
+      `——————————————\n\n` +
+      `¿Me confirman disponibilidad para coordinar el envío? ¡Gracias!`;
 
-    return `https://wa.me/18295553842?text=${message}`;
+    return whatsappUrl(message);
   };
 
   return (
@@ -151,28 +186,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </button>
         </div>
 
-        {/* Free shipping status bar */}
-        <div className="bg-[#050505] px-5 py-2.5 border-b border-[#1f1f1f] text-xs">
-          {isShippingFree ? (
-            <p className="text-[#22c55e] flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>¡Felicidades! Calificas para Envío Express Gratis en RD</span>
-            </p>
-          ) : (
-            <div>
-              <p className="text-[#B8B8B8] mb-1">
-                Agrega <strong className="text-[#D4AF37] font-mono tabular-nums">RD$ {(shippingThreshold - subtotal).toLocaleString()}</strong> más para <span className="text-[#FAF7F0] font-medium">Envío Gratis</span>
-              </p>
-              <div className="w-full bg-[#262626] h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-[#D4AF37] h-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, (subtotal / shippingThreshold) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {items.length === 0 ? (
@@ -185,7 +198,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 Descubre nuestra selección de alta perfumería y añade tu fragancia de firma.
               </p>
               <button
-                onClick={onClose}
+                onClick={onExplore}
                 className="px-6 py-2.5 bg-[#D4AF37] text-[#050505] rounded-md font-sans text-xs font-semibold uppercase tracking-wider hover:bg-[#FFD76A] transition-colors"
               >
                 Explorar Perfumes
@@ -243,7 +256,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </span>
                       <button
                         onClick={() => onUpdateQuantity(item.perfume.id, item.sizeMl, 1)}
-                        className="px-2 py-0.5 text-[#B8B8B8] hover:text-[#FAF7F0]"
+                        disabled={isMaxStockReached(item)}
+                        title={isMaxStockReached(item) ? 'No hay más disponibles' : 'Agregar una unidad'}
+                        className={`px-2 py-0.5 ${
+                          isMaxStockReached(item)
+                            ? 'text-[#444] cursor-not-allowed'
+                            : 'text-[#B8B8B8] hover:text-[#FAF7F0]'
+                        }`}
                       >
                         +
                       </button>
@@ -251,31 +270,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 </div>
               ))}
-
-              {/* Coupon Form */}
-              <div className="pt-2">
-                <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    placeholder="Código de cortesía (ej. DVICTOR10)"
-                    className="flex-1 bg-[#080808] border border-[#262626] focus:border-[#D4AF37] text-xs text-[#FAF7F0] px-3 py-2 rounded outline-none uppercase"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3 py-2 bg-[#1f1f1f] hover:bg-[#2a2a2a] text-xs font-medium text-[#FAF7F0] rounded transition-colors whitespace-nowrap cursor-pointer"
-                  >
-                    Aplicar
-                  </button>
-                </form>
-                {couponSuccess && (
-                  <p className="text-[11px] text-[#22c55e] mt-1">{couponSuccess}</p>
-                )}
-                {couponError && (
-                  <p className="text-[11px] text-red-400 mt-1">{couponError}</p>
-                )}
-              </div>
             </div>
           ) : (
             /* Checkout Step */
@@ -475,28 +469,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {items.length > 0 && (
           <div className="p-5 border-t border-[#262626] bg-[#080808] space-y-3">
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between text-[#B8B8B8]">
-                <span>Subtotal</span>
-                <span className="font-mono text-[#FAF7F0] tabular-nums">
-                  RD$ {subtotal.toLocaleString()}
-                </span>
-              </div>
-              {appliedDiscountPercent > 0 && (
-                <div className="flex justify-between text-[#22c55e]">
-                  <span>Descuento de Cortesía ({appliedDiscountPercent}%)</span>
-                  <span className="font-mono tabular-nums">
-                    - RD$ {discountAmount.toLocaleString()}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between text-[#B8B8B8]">
-                <span>Envío estimado</span>
-                <span className="font-mono text-[#FAF7F0] tabular-nums">
-                  {isShippingFree ? 'Gratis' : `RD$ ${shippingCost.toLocaleString()}`}
-                </span>
-              </div>
-              <div className="pt-2 border-t border-[#262626] flex justify-between text-sm sm:text-base font-bold text-[#FAF7F0]">
-                <span className="font-serif">Total en Pesos Dominicanos</span>
+              <div className="flex justify-between text-sm sm:text-base font-bold text-[#FAF7F0]">
+                <span className="font-serif">Total</span>
                 <span className="text-[#D4AF37] font-mono tabular-nums">
                   RD$ {finalTotal.toLocaleString()}
                 </span>
@@ -507,6 +481,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="space-y-2">
                 <a
                   href={getWhatsAppCartUrl()}
+                  onClick={submitOrderToBackend}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-2.5 bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-[#25D366] hover:text-white rounded-md font-sans text-xs font-semibold uppercase tracking-[0.14em] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
@@ -514,14 +489,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <MessageCircle className="w-4 h-4 text-[#25D366]" />
                   <span>Pedir por WhatsApp al Proveedor</span>
                 </a>
-
-                <button
-                  onClick={() => setStep('checkout')}
-                  className="w-full py-3 bg-gradient-to-r from-[#D4AF37] to-[#B38F24] hover:from-[#FFD76A] hover:to-[#D4AF37] text-[#050505] rounded-md font-sans text-xs font-semibold uppercase tracking-[0.16em] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-[0_4px_16px_rgba(212,175,55,0.25)]"
-                >
-                  <span>Proceder al Pago en Línea</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
               </div>
             ) : (
               <button

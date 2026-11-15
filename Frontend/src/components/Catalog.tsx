@@ -4,7 +4,7 @@
  * QUÉ ES: Catálogo completo con buscador, filtros, orden y grid de tarjetas.
  * DÓNDE SE VE: Inicio → bloque 5 ("Catálogo") y pestaña "Catálogo".
  * SE RENDERIZA DESDE: App.tsx (dos veces).
- * PROPS: perfumes, onSelectPerfume, onAddToCart, wishlist, onToggleWishlist,
+ * PROPS: perfumes, onSelectPerfume, onQuickAdd,
  *        initialFilter (opcional; hoy no se usa desde App).
  * QUÉ TOCAR:
  *   - Filtros y orden → estado `filters` + `filteredPerfumes`.
@@ -15,28 +15,29 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, Heart, ShoppingBag, Eye, RotateCcw, Check, Sparkles } from 'lucide-react';
-import { Perfume, FilterState, Gender, OlfactoryFamily } from '../types';
-import { HOUSES_LIST } from '../data/perfumes';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, SlidersHorizontal, ShoppingBag, Eye, RotateCcw, Check } from 'lucide-react';
+import { Perfume, PerfumeSize, FilterState, Gender, OlfactoryFamily } from '../types';
 import { Reveal } from './Reveal';
 
 interface CatalogProps {
   perfumes: Perfume[];
   onSelectPerfume: (perfume: Perfume) => void;
-  onAddToCart: (perfume: Perfume, sizeMl: number) => void;
-  wishlist: string[];
-  onToggleWishlist: (perfumeId: string) => void;
+  onQuickAdd: (perfume: Perfume) => void;
   initialFilter?: Partial<FilterState>;
+  recentlyAddedId?: string | null;
 }
+
+// ¿La presentación (ml) tiene unidades disponibles?
+const sizeHasStock = (size: PerfumeSize): boolean =>
+  size.inStock && (size.stock === null || size.stock === undefined || size.stock > 0);
 
 export const Catalog: React.FC<CatalogProps> = ({
   perfumes,
   onSelectPerfume,
-  onAddToCart,
-  wishlist,
-  onToggleWishlist,
+  onQuickAdd,
   initialFilter,
+  recentlyAddedId,
 }) => {
   const [filters, setFilters] = useState<FilterState>({
     search: initialFilter?.search || '',
@@ -50,6 +51,16 @@ export const Catalog: React.FC<CatalogProps> = ({
 
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
   const [addedItemNotification, setAddedItemNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (recentlyAddedId) {
+      setAddedItemNotification(recentlyAddedId);
+      const timer = setTimeout(() => {
+        setAddedItemNotification(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [recentlyAddedId]);
 
   const families: OlfactoryFamily[] = [
     'Amaderada',
@@ -124,15 +135,19 @@ export const Catalog: React.FC<CatalogProps> = ({
   }, [perfumes, filters]);
 
   // ── AÑADIR RÁPIDO ──────────────────────────────────────────────────────────
-  // Añade la primera talla del perfume y muestra "Agregado" por 1.8 s.
+  // Delega en App: si el perfume tiene una sola presentación se agrega directo;
+  // si tiene varias, App abre el selector para que el cliente elija el ml.
   const handleQuickAdd = (e: React.MouseEvent, perfume: Perfume) => {
     e.stopPropagation();
-    const defaultSize = perfume.sizes[0];
-    onAddToCart(perfume, defaultSize.ml);
-    setAddedItemNotification(perfume.id);
-    setTimeout(() => {
-      setAddedItemNotification(null);
-    }, 1800);
+    onQuickAdd(perfume);
+    // Solo mostramos "Agregado" cuando no hay que elegir ml. Si se abre el
+    // selector, el cliente todavía no ha comprado nada.
+    if (perfume.sizes.length <= 1) {
+      setAddedItemNotification(perfume.id);
+      setTimeout(() => {
+        setAddedItemNotification(null);
+      }, 1800);
+    }
   };
 
   const handleResetFilters = () => {
@@ -305,28 +320,16 @@ export const Catalog: React.FC<CatalogProps> = ({
               </div>
             </div>
 
-            {/* Brand / House */}
-            <div>
-              <label className="block text-[11px] font-sans uppercase tracking-wider text-[#D4AF37] font-semibold mb-2">
-                Casa Perfumera
-              </label>
-              <select
-                value={filters.brand}
-                onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
-                className="w-full bg-[#050505] border border-[#262626] text-xs text-[#FAF7F0] p-2.5 rounded focus:border-[#D4AF37] outline-none"
-              >
-                {HOUSES_LIST.map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Price Range in DOP */}
             <div>
               <div className="flex items-center justify-between text-[11px] font-sans uppercase tracking-wider text-[#D4AF37] font-semibold mb-2">
-                <span>Precio Máximo</span>
+                <span>
+                  {filters.maxPrice <= 8000
+                    ? 'Precio Menor o Igual a'
+                    : filters.maxPrice >= 45000
+                      ? 'Precio Mayor o Igual a'
+                      : 'Precio Máximo'}
+                </span>
                 <span className="text-[#FAF7F0] font-mono tabular-nums">
                   RD$ {filters.maxPrice.toLocaleString()}
                 </span>
@@ -345,37 +348,22 @@ export const Catalog: React.FC<CatalogProps> = ({
                 <span>RD$ 45,000</span>
               </div>
             </div>
-
-            {/* Delivery Assurance */}
-            <div className="pt-3 border-t border-[#262626] text-[11px] text-[#B8B8B8] space-y-2">
-              <p className="flex items-center gap-1.5 text-[#F5E6B3]">
-                <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                <span>¿Dudas sobre cuál elegir?</span>
-              </p>
-              <p className="text-[10px] leading-relaxed">
-                Nuestros asesores en Santo Domingo te ayudan por WhatsApp en tiempo real.
-              </p>
-            </div>
           </Reveal>
 
           {/* Product Grid Area */}
           <div className="lg:col-span-3">
-            {/* Results count */}
-            <div className="flex items-center justify-between mb-4 text-xs text-[#B8B8B8]">
-              <span>
-                Mostrando <strong className="text-[#FAF7F0] tabular-nums">{filteredPerfumes.length}</strong> fragancias exclusivas
-              </span>
-              {(filters.search ||
-                filters.gender !== 'Todos' ||
-                filters.category !== 'Todos' ||
-                filters.family !== 'Todos' ||
-                filters.brand !== 'Todas' ||
-                filters.maxPrice < 45000) && (
+            {(filters.search ||
+              filters.gender !== 'Todos' ||
+              filters.category !== 'Todos' ||
+              filters.family !== 'Todos' ||
+              filters.brand !== 'Todas' ||
+              filters.maxPrice < 45000) && (
+              <div className="flex items-center justify-between mb-4 text-xs text-[#B8B8B8]">
                 <span className="text-[#D4AF37] text-[11px]">
                   Filtros activos aplicados
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {filteredPerfumes.length === 0 ? (
               <div className="bg-[#111111] border border-[#262626] rounded-lg p-12 text-center">
@@ -395,8 +383,8 @@ export const Catalog: React.FC<CatalogProps> = ({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredPerfumes.map((perfume, index) => {
-                  const defaultSize = perfume.sizes[0];
-                  const isWishlisted = wishlist.includes(perfume.id);
+                  const defaultSize = perfume.sizes.find(sizeHasStock) || perfume.sizes[0];
+                  const canAdd = sizeHasStock(defaultSize);
                   const isJustAdded = addedItemNotification === perfume.id;
 
                   return (
@@ -429,24 +417,6 @@ export const Catalog: React.FC<CatalogProps> = ({
                           )}
                         </div>
 
-                        {/* Top Right Wishlist Toggle */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleWishlist(perfume.id);
-                          }}
-                          className="absolute top-3 right-3 p-2 rounded-full bg-[#050505]/70 hover:bg-[#050505] text-[#FAF7F0] border border-[#262626] transition-colors"
-                          aria-label={isWishlisted ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-                        >
-                          <Heart
-                            className={`w-3.5 h-3.5 ${
-                              isWishlisted
-                                ? 'fill-[#D4AF37] text-[#D4AF37]'
-                                : 'text-[#FAF7F0]'
-                            }`}
-                          />
-                        </button>
-
                         {/* Quick View Hover Strip */}
                         <div className="absolute inset-x-0 bottom-0 py-2 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           <span className="text-[11px] text-[#FAF7F0] font-medium flex items-center gap-1">
@@ -473,12 +443,22 @@ export const Catalog: React.FC<CatalogProps> = ({
                           </h3>
 
                           {/* Olfactory Family & Gender (Zero-pill clean metadata with dot separator) */}
-                          <div className="text-[11px] text-[#B8B8B8] flex items-center gap-1.5 mb-3">
+                          <div className="text-[11px] text-[#B8B8B8] flex items-center gap-1.5 mb-2">
                             <span>{perfume.family}</span>
                             <span>·</span>
                             <span>{perfume.gender}</span>
-                            <span>·</span>
-                            <span>{defaultSize.ml} ml</span>
+                          </div>
+
+                          {/* Presentaciones (ml) disponibles */}
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {perfume.sizes.map((s) => (
+                              <span
+                                key={s.ml}
+                                className="text-[10px] px-1.5 py-0.5 rounded border border-[#262626] text-[#B8B8B8]"
+                              >
+                                {s.ml} ml
+                              </span>
+                            ))}
                           </div>
                         </div>
 
@@ -495,7 +475,7 @@ export const Catalog: React.FC<CatalogProps> = ({
 
                           <button
                             onClick={(e) => handleQuickAdd(e, perfume)}
-                            disabled={!defaultSize.inStock}
+                            disabled={!canAdd}
                             className={`px-3.5 py-2 rounded-md font-sans text-xs font-semibold tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                               isJustAdded
                                 ? 'bg-[#22c55e] text-white'

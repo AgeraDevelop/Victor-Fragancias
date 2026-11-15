@@ -46,6 +46,11 @@ model Producto {
   nombre            String?
   marca             String?
   imagen_url        String?
+  // Imagen subida desde el Panel Admin: se guarda como bytes en la propia
+  // base de datos (no como archivo en el frontend). `imagen_mime` es su
+  // tipo (image/jpeg, image/png, ...). Se sirve vía /api/productos/:id/imagen.
+  imagen_mime       String?
+  imagen_data       Bytes?
   genero            String?
   concentracion     String?
   familia_olfativa  String?
@@ -57,8 +62,45 @@ model Producto {
   disponible        Boolean?  @default(true)
   fecha_creacion    DateTime? @default(now()) @db.Timestamptz
 
-  categoria Categoria? @relation(fields: [categoria_id], references: [id])
-  usuario   Usuario?   @relation(fields: [usuario_id], references: [id])
+  categoria    Categoria?    @relation(fields: [categoria_id], references: [id])
+  usuario      Usuario?      @relation(fields: [usuario_id], references: [id])
+  pedido_items PedidoItem[]
 
   @@map("productos")
+}
+
+// ── Pedidos enviados por WhatsApp (los confirma el Panel Admin) ─────────────
+model Pedido {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codigo             String?
+  subtotal           Decimal?  @db.Decimal
+  descuento          Decimal?  @db.Decimal
+  envio              Decimal?  @db.Decimal
+  total              Decimal?  @db.Decimal
+  estado             String?   @default("pendiente")
+  origen             String?   @default("whatsapp")
+  fecha_creacion     DateTime? @default(now()) @db.Timestamptz
+  fecha_confirmacion DateTime? @db.Timestamptz
+
+  items PedidoItem[]
+
+  @@map("pedidos")
+}
+
+model PedidoItem {
+  id          BigInt   @id @default(autoincrement())
+  pedido_id   String   @db.Uuid
+  producto_id BigInt?
+  nombre      String?
+  marca       String?
+  imagen_url  String?
+  tamano_ml   Int?     @db.SmallInt
+  precio      Decimal? @db.Decimal
+  cantidad    Int?
+  subtotal    Decimal? @db.Decimal
+
+  pedido   Pedido    @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  producto Producto? @relation(fields: [producto_id], references: [id], onDelete: SetNull)
+
+  @@map("pedido_items")
 }
