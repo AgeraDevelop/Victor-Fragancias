@@ -1,0 +1,25 @@
+services:
+  # API backend (Express + Prisma) desplegada como Web Service de Node.
+  - type: web
+    name: victor-fragancias-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev && npm run prisma:generate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: NODE_ENV
+        value: production
+      # Cadena de conexión de Supabase (Project Settings > Database > Connection string > URI).
+      # Usa el Connection Pooler (puerto 6543, con ?pgbouncer=true&connection_limit=1).
+      - key: DATABASE_URL
+        sync: false
+      # Se genera automáticamente un secreto seguro en el primer deploy.
+      - key: JWT_SECRET
+        generateValue: true
+      # URL pública del frontend en Vercel (ej. https://victor-fragancias.vercel.app).
+      - key: CORS_ORIGIN
+        sync: false

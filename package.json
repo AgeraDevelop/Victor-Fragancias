@@ -3,8 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite --config Frontend/vite.config.ts --port=3000 --host=0.0.0.0",
+    "start": "tsx backend/src/server.ts",
     "server": "tsx backend/src/server.ts",
     "server:dev": "tsx watch backend/src/server.ts",
     "prisma:generate": "prisma generate --schema=base-de-datos/prisma/schema.prisma",
