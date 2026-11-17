@@ -72,14 +72,40 @@ bytes en la BD**:
   `downloadImage`) y guarda los bytes. Así no hay que descargar el archivo a
   mano, pero la imagen queda alojada en la BD y no depende de la web externa.
 
+#### Procesamiento automático con Sharp
+
+Al subir o descargar una imagen, el backend la procesa con **Sharp** (`utils/image.ts`
+→ `processProductImage`) antes de guardarla en la BD:
+
+1. **Auto-orientación**: corrige la rotación según datos EXIF de la cámara/teléfono.
+2. **Detección inteligente del tipo de imagen**:
+   - **Producto aislado** (fondo sólido o transparente): recorta los márgenes
+     vacíos (trim) y centra el frasco dentro de márgenes seguros (840×756 px
+     dentro de un lienzo de 1200×900). Así el producto nunca se corta en
+     ninguna vista del frontend (4:3 catálogo, 3:4 carrusel, 4:5 modal, 1:1 admin).
+   - **Fotografía escénica** (campaña, lifestyle): ajusta proporcionalmente con
+     cover o contain según la proporción original.
+3. **Conversión a WebP** optimizado (calidad 85), reduciendo el peso
+   drásticamente (de ~800 KB JPEG a ~50-150 KB WebP).
+
+#### Thumbnails al vuelo
+
+El endpoint `GET /api/productos/:id/imagen` acepta query params opcionales para
+servir versiones redimensionadas sin duplicar datos en la BD:
+
+- `?w=200` → ancho máximo 200 px (mantiene proporción)
+- `?h=200` → alto máximo 200 px
+- `?w=200&h=200` → ambos máximos (fit: inside)
+- Sin params → imagen completa 1200×900
+
 Detalles:
 
 - Columnas en `productos`: `imagen_data` (`bytea` con los bytes) e `imagen_mime`
-  (tipo MIME, ej. `image/jpeg`).
+  (tipo MIME; las nuevas se guardan como `image/webp`).
 - `imagen_url` se conserva solo para rutas relativas antiguas; cuando la imagen
   se descarga/sube, queda en `null` porque ya vive en la BD.
 - El backend valida tipo (JPG/PNG/WEBP/GIF/AVIF, detectado también por firma
-  binaria) y tamaño (máx. 8 MB).
+  binaria) y tamaño (máx. 8 MB antes de procesar).
 - La imagen se sirve por `GET /api/productos/:id/imagen`. En las respuestas, el
   campo `imagen_url` apunta a ese endpoint cuando el producto tiene imagen en BD
   (`has_db_image: true`).
